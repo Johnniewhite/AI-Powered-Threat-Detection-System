@@ -121,7 +121,7 @@ frontend/
 ### Backend Setup
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/Johnniewhite/AI-Powered-Threat-Detection-System
 cd threat-detection-system
 
 # Create and activate virtual environment
