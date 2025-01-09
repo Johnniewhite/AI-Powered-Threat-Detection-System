@@ -1,36 +1,55 @@
 import React, { useState } from 'react';
 import {
-  Box,
   Container,
   Paper,
   Typography,
   TextField,
   Button,
-  Link,
+  Box,
   Alert,
+  Link,
+  useTheme,
+  alpha
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { auth } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
-export const Login: React.FC = () => {
+const Login = () => {
+  const theme = useTheme();
   const navigate = useNavigate();
-  const { login } = useAuth();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const { setUser } = useAuth();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setLoading(true);
 
+    if (!formData.email || !formData.password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    setLoading(true);
     try {
-      await login(username, password);
-      navigate('/');
+      const response = await auth.login(formData.email, formData.password);
+      setUser(response.user);
+      navigate('/dashboard');
     } catch (err) {
-      setError('Failed to login. Please check your credentials.');
-      console.error('Login error:', err);
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -38,72 +57,69 @@ export const Login: React.FC = () => {
 
   return (
     <Container maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper
-          elevation={3}
-          sx={{
-            padding: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            width: '100%',
+      <Box sx={{ py: 4 }}>
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            p: 4,
+            background: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(10px)'
           }}
         >
-          <Typography component="h1" variant="h4" gutterBottom>
-            Sign In
+          <Typography variant="h4" component="h1" gutterBottom align="center">
+            Login
           </Typography>
-          {error && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
+
+          <form onSubmit={handleSubmit}>
             <TextField
+              fullWidth
+              label="Email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
               margin="normal"
               required
-              fullWidth
-              id="username"
-              label="Username"
-              name="username"
-              autoComplete="username"
-              autoFocus
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
             />
+
             <TextField
-              margin="normal"
-              required
               fullWidth
-              name="password"
               label="Password"
+              name="password"
               type="password"
-              id="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={formData.password}
+              onChange={handleChange}
+              margin="normal"
+              required
             />
+
+            {error && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {error}
+              </Alert>
+            )}
+
             <Button
               type="submit"
-              fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              color="primary"
+              fullWidth
+              size="large"
               disabled={loading}
+              sx={{ mt: 3 }}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? 'Logging in...' : 'Login'}
             </Button>
-            <Box sx={{ textAlign: 'center' }}>
-              <Link component={RouterLink} to="/register" variant="body2">
-                {"Don't have an account? Sign Up"}
-              </Link>
+
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Typography variant="body2">
+                Don't have an account?{' '}
+                <Link component={RouterLink} to="/register">
+                  Register here
+                </Link>
+              </Typography>
             </Box>
-          </Box>
+          </form>
         </Paper>
       </Box>
     </Container>

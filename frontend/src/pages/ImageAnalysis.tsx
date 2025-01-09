@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Container,
@@ -6,299 +6,207 @@ import {
   Paper,
   CircularProgress,
   Alert,
+  Fade,
   Card,
   CardContent,
-  Grid,
+  Divider,
+  Chip,
+  Stack,
   useTheme,
-  Button,
-  IconButton,
-  Tooltip,
+  alpha,
+  IconButton
 } from '@mui/material';
-import { useDropzone } from 'react-dropzone';
-import {
-  CloudUpload as UploadIcon,
-  Delete as DeleteIcon,
-  Refresh as RefreshIcon,
-  Security as SecurityIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  CheckCircle as CheckCircleIcon,
-} from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../services/api';
-
-interface AnalysisResult {
-  threat_score: number;
-  confidence_score: number;
-  threat_category: string;
-  analysis_results: {
-    details: string;
-  };
-  remediation_suggestions: {
-    actions: string[];
-  };
-}
+import { SecurityOutlined, WarningOutlined, CloudUpload as CloudUploadIcon } from '@mui/icons-material';
+import { detection } from '../services/api';
+import { Detection } from '../types';
 
 const ImageAnalysis: React.FC = () => {
   const theme = useTheme();
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [result, setResult] = useState<Detection | null>(null);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const selectedFile = acceptedFiles[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setPreview(URL.createObjectURL(selectedFile));
-      setResult(null);
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setFile(event.target.files[0]);
       setError(null);
     }
-  }, []);
+  };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.bmp'],
-    },
-    maxFiles: 1,
-    multiple: false,
-  });
-
-  const handleAnalyze = async () => {
-    if (!file) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file) {
+      setError('Please select an image to analyze');
+      return;
+    }
 
     setLoading(true);
     setError(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const response = await api.post('/api/v1/detection/image', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      setResult(response.data);
+      const response = await detection.analyzeImage(file);
+      setResult(response);
     } catch (err) {
-      setError('Failed to analyze image. Please try again.');
-      console.error('Error analyzing image:', err);
+      setError(err instanceof Error ? err.message : 'Failed to analyze image');
+      setResult(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleClear = () => {
-    setFile(null);
-    setPreview(null);
-    setResult(null);
-    setError(null);
-  };
+  const renderAnalysisResult = () => {
+    if (!result) return null;
 
-  const getThreatIcon = (score: number) => {
-    if (score >= 0.7) return <ErrorIcon sx={{ color: theme.palette.error.main }} />;
-    if (score >= 0.4) return <WarningIcon sx={{ color: theme.palette.warning.main }} />;
-    return <CheckCircleIcon sx={{ color: theme.palette.success.main }} />;
-  };
+    return (
+      <Fade in={true} timeout={500}>
+        <Card 
+          elevation={3}
+          sx={{
+            mt: 4,
+            background: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(10px)'
+          }}
+        >
+          <CardContent>
+            <Typography variant="h6" color="primary" gutterBottom>
+              Analysis Results
+            </Typography>
+            
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+                Threat Assessment
+              </Typography>
+              <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+                <Chip
+                  label={`Threat Score: ${(result.threat_score * 100).toFixed(1)}%`}
+                  color={result.threat_score > 0.7 ? 'error' : result.threat_score > 0.4 ? 'warning' : 'success'}
+                  icon={<WarningOutlined />}
+                />
+                <Chip
+                  label={`Confidence: ${(result.confidence_score * 100).toFixed(1)}%`}
+                  color="primary"
+                />
+              </Stack>
+            </Box>
 
-  const getThreatColor = (score: number) => {
-    if (score >= 0.7) return theme.palette.error.main;
-    if (score >= 0.4) return theme.palette.warning.main;
-    return theme.palette.success.main;
+            <Divider sx={{ my: 2 }} />
+
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+                Detected Indicators
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+                {result.analysis_results.indicators.map((indicator: string, index: number) => (
+                  <Chip
+                    key={index}
+                    label={indicator}
+                    size="small"
+                    sx={{ mb: 1 }}
+                  />
+                ))}
+              </Stack>
+            </Box>
+
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+                Remediation Suggestions
+              </Typography>
+              <Stack spacing={1}>
+                {result.remediation_suggestions.actions.map((action: string, index: number) => (
+                  <Typography key={index} variant="body2" color="text.secondary">
+                    • {action}
+                  </Typography>
+                ))}
+              </Stack>
+            </Box>
+
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Priority Level: {result.remediation_suggestions.priority.toUpperCase()}
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      </Fade>
+    );
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Paper
-        sx={{
-          p: 3,
-          mb: 4,
-          background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-          color: 'white',
-        }}
-      >
-        <Typography variant="h4" gutterBottom>
+    <Container maxWidth="md">
+      <Box sx={{ py: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ mb: 4 }}>
+          <SecurityOutlined sx={{ mr: 1, verticalAlign: 'bottom' }} />
           Image Analysis
         </Typography>
-        <Typography variant="subtitle1">
-          Upload an image for threat detection analysis
-        </Typography>
-      </Paper>
 
-      <Grid container spacing={4}>
-        <Grid item xs={12} md={6}>
-          <Paper
-            {...getRootProps()}
-            sx={{
-              p: 3,
-              textAlign: 'center',
-              cursor: 'pointer',
-              backgroundColor: isDragActive
-                ? theme.palette.action.hover
-                : theme.palette.background.paper,
-              border: `2px dashed ${
-                isDragActive ? theme.palette.primary.main : theme.palette.divider
-              }`,
-              '&:hover': {
-                backgroundColor: theme.palette.action.hover,
-              },
-            }}
-          >
-            <input {...getInputProps()} />
-            <UploadIcon sx={{ fontSize: 48, color: theme.palette.primary.main }} />
-            <Typography variant="h6" sx={{ mt: 2 }}>
-              {isDragActive
-                ? 'Drop the image here'
-                : 'Drag and drop an image here, or click to select'}
-            </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-              Supported formats: JPEG, PNG, GIF, BMP
-            </Typography>
-          </Paper>
-
-          {preview && (
-            <Box sx={{ mt: 3, position: 'relative' }}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-              >
-                <Paper sx={{ p: 2 }}>
-                  <img
-                    src={preview}
-                    alt="Preview"
-                    style={{
-                      width: '100%',
-                      height: 'auto',
-                      maxHeight: '300px',
-                      objectFit: 'contain',
-                    }}
-                  />
-                  <Box
-                    sx={{
-                      mt: 2,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Typography variant="body2" color="textSecondary">
-                      {file?.name}
-                    </Typography>
-                    <Box>
-                      <Tooltip title="Clear">
-                        <IconButton onClick={handleClear} size="small">
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Analyze">
-                        <IconButton
-                          onClick={handleAnalyze}
-                          disabled={loading}
-                          color="primary"
-                          size="small"
-                        >
-                          {loading ? (
-                            <CircularProgress size={24} />
-                          ) : (
-                            <SecurityIcon />
-                          )}
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </Box>
-                </Paper>
-              </motion.div>
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            p: 3,
+            background: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(10px)'
+          }}
+        >
+          <form onSubmit={handleSubmit}>
+            <Box
+              sx={{
+                border: `2px dashed ${theme.palette.divider}`,
+                borderRadius: 1,
+                p: 3,
+                textAlign: 'center',
+                cursor: 'pointer',
+                '&:hover': {
+                  borderColor: theme.palette.primary.main,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                },
+                mb: 2
+              }}
+              component="label"
+            >
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+                disabled={loading}
+              />
+              <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+              <Typography variant="body1" color="text.secondary">
+                {file ? file.name : 'Click or drag to upload an image'}
+              </Typography>
             </Box>
-          )}
-        </Grid>
 
-        <Grid item xs={12} md={6}>
-          <AnimatePresence>
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-              >
-                <Alert severity="error" sx={{ mb: 3 }}>
-                  {error}
-                </Alert>
-              </motion.div>
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
             )}
 
-            {result && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <IconButton
+                color="primary"
+                onClick={handleSubmit}
+                disabled={loading || !file}
+                size="large"
+                sx={{
+                  backgroundColor: theme.palette.primary.main,
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: theme.palette.primary.dark,
+                  },
+                  '&:disabled': {
+                    backgroundColor: theme.palette.action.disabledBackground,
+                  },
+                }}
               >
-                <Card>
-                  <CardContent>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        mb: 2,
-                      }}
-                    >
-                      {getThreatIcon(result.threat_score)}
-                      <Typography
-                        variant="h6"
-                        sx={{ ml: 1, color: getThreatColor(result.threat_score) }}
-                      >
-                        {result.analysis_results.details}
-                      </Typography>
-                    </Box>
+                {loading ? <CircularProgress size={24} color="inherit" /> : <CloudUploadIcon />}
+              </IconButton>
+            </Box>
+          </form>
+        </Paper>
 
-                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Threat Score
-                        </Typography>
-                        <Typography variant="h4">
-                          {(result.threat_score * 100).toFixed(1)}%
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Confidence
-                        </Typography>
-                        <Typography variant="h4">
-                          {(result.confidence_score * 100).toFixed(1)}%
-                        </Typography>
-                      </Grid>
-                    </Grid>
-
-                    <Box sx={{ mt: 3 }}>
-                      <Typography variant="subtitle2" color="textSecondary">
-                        Recommended Actions
-                      </Typography>
-                      {result.remediation_suggestions.actions.map((action, index) => (
-                        <Alert
-                          key={index}
-                          severity={
-                            result.threat_score >= 0.7
-                              ? 'error'
-                              : result.threat_score >= 0.4
-                              ? 'warning'
-                              : 'success'
-                          }
-                          sx={{ mt: 1 }}
-                        >
-                          {action}
-                        </Alert>
-                      ))}
-                    </Box>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </Grid>
-      </Grid>
+        {renderAnalysisResult()}
+      </Box>
     </Container>
   );
 };

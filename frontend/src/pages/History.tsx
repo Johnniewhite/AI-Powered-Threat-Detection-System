@@ -39,7 +39,7 @@ export const History: React.FC = () => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const data = await detection.getHistory();
+        const data = await detection.getList(page * rowsPerPage, rowsPerPage);
         setDetections(data);
       } catch (err) {
         setError('Failed to load detection history');
@@ -50,7 +50,7 @@ export const History: React.FC = () => {
     };
 
     fetchHistory();
-  }, []);
+  }, [page, rowsPerPage]);
 
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);

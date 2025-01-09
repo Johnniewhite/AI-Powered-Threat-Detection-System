@@ -3,37 +3,34 @@ import {
   Box,
   Container,
   Typography,
+  TextField,
+  Button,
   Paper,
   CircularProgress,
   Alert,
+  Fade,
   Card,
   CardContent,
-  Grid,
+  Divider,
+  Chip,
+  Stack,
   useTheme,
-  TextField,
-  Button,
-  IconButton,
-  Tooltip,
+  alpha
 } from '@mui/material';
-import {
-  Security as SecurityIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  CheckCircle as CheckCircleIcon,
-  Delete as DeleteIcon,
-} from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../services/api';
+import { SecurityOutlined, SendOutlined, WarningOutlined } from '@mui/icons-material';
+import { detection } from '../services/api';
 
-interface AnalysisResult {
+interface Detection {
   threat_score: number;
   confidence_score: number;
   threat_category: string;
   analysis_results: {
     details: string;
+    indicators: string[];
   };
   remediation_suggestions: {
     actions: string[];
+    priority: string;
   };
 }
 
@@ -42,9 +39,10 @@ const TextAnalysis: React.FC = () => {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [result, setResult] = useState<Detection | null>(null);
 
-  const handleAnalyze = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!text.trim()) {
       setError('Please enter some text to analyze');
       return;
@@ -52,240 +50,146 @@ const TextAnalysis: React.FC = () => {
 
     setLoading(true);
     setError(null);
-
     try {
-      const response = await api.post('/api/v1/detection/text', { text });
-      setResult(response.data);
+      const response = await detection.analyzeText(text);
+      setResult(response);
     } catch (err) {
-      setError('Failed to analyze text. Please try again.');
-      console.error('Error analyzing text:', err);
+      setError(err instanceof Error ? err.message : 'Failed to analyze text');
+      setResult(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleClear = () => {
-    setText('');
-    setResult(null);
-    setError(null);
-  };
+  const renderAnalysisResult = () => {
+    if (!result) return null;
 
-  const getThreatIcon = (score: number) => {
-    if (score >= 0.7) return <ErrorIcon sx={{ color: theme.palette.error.main }} />;
-    if (score >= 0.4) return <WarningIcon sx={{ color: theme.palette.warning.main }} />;
-    return <CheckCircleIcon sx={{ color: theme.palette.success.main }} />;
-  };
+    return (
+      <Fade in={true} timeout={500}>
+        <Card 
+          elevation={3}
+          sx={{
+            mt: 4,
+            background: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(10px)'
+          }}
+        >
+          <CardContent>
+            <Typography variant="h6" color="primary" gutterBottom>
+              Analysis Results
+            </Typography>
+            
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+                Threat Assessment
+              </Typography>
+              <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+                <Chip
+                  label={`Threat Score: ${(result.threat_score * 100).toFixed(1)}%`}
+                  color={result.threat_score > 0.7 ? 'error' : result.threat_score > 0.4 ? 'warning' : 'success'}
+                  icon={<WarningOutlined />}
+                />
+                <Chip
+                  label={`Confidence: ${(result.confidence_score * 100).toFixed(1)}%`}
+                  color="primary"
+                />
+              </Stack>
+            </Box>
 
-  const getThreatColor = (score: number) => {
-    if (score >= 0.7) return theme.palette.error.main;
-    if (score >= 0.4) return theme.palette.warning.main;
-    return theme.palette.success.main;
-  };
+            <Divider sx={{ my: 2 }} />
 
-  const getProgressColor = (score: number) => {
-    if (score >= 0.7) return theme.palette.error.main;
-    if (score >= 0.4) return theme.palette.warning.main;
-    return theme.palette.success.main;
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+                Detected Indicators
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+                {result.analysis_results.indicators.map((indicator: string, index: number) => (
+                  <Chip
+                    key={index}
+                    label={indicator}
+                    size="small"
+                    sx={{ mb: 1 }}
+                  />
+                ))}
+              </Stack>
+            </Box>
+
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+                Remediation Suggestions
+              </Typography>
+              <Stack spacing={1}>
+                {result.remediation_suggestions.actions.map((action: string, index: number) => (
+                  <Typography key={index} variant="body2" color="text.secondary">
+                    • {action}
+                  </Typography>
+                ))}
+              </Stack>
+            </Box>
+
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Priority Level: {result.remediation_suggestions.priority.toUpperCase()}
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      </Fade>
+    );
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Paper
-        sx={{
-          p: 3,
-          mb: 4,
-          background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-          color: 'white',
-        }}
-      >
-        <Typography variant="h4" gutterBottom>
+    <Container maxWidth="md">
+      <Box sx={{ py: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ mb: 4 }}>
+          <SecurityOutlined sx={{ mr: 1, verticalAlign: 'bottom' }} />
           Text Analysis
         </Typography>
-        <Typography variant="subtitle1">
-          Enter text content for threat detection analysis
-        </Typography>
-      </Paper>
 
-      <Grid container spacing={4}>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            p: 3,
+            background: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(10px)'
+          }}
+        >
+          <form onSubmit={handleSubmit}>
             <TextField
               fullWidth
               multiline
-              rows={10}
+              rows={6}
               variant="outlined"
-              placeholder="Enter text to analyze..."
+              placeholder="Enter text to analyze for potential security threats..."
               value={text}
               onChange={(e) => setText(e.target.value)}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&.Mui-focused fieldset': {
-                    borderColor: theme.palette.primary.main,
-                  },
-                },
-              }}
+              disabled={loading}
+              sx={{ mb: 2 }}
             />
-            <Box
-              sx={{
-                mt: 2,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography variant="body2" color="textSecondary">
-                {text.length} characters
-              </Typography>
-              <Box>
-                <Tooltip title="Clear">
-                  <IconButton
-                    onClick={handleClear}
-                    size="small"
-                    disabled={!text || loading}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Tooltip>
-                <Button
-                  variant="contained"
-                  onClick={handleAnalyze}
-                  disabled={!text.trim() || loading}
-                  startIcon={loading ? <CircularProgress size={20} /> : <SecurityIcon />}
-                  sx={{ ml: 1 }}
-                >
-                  Analyze
-                </Button>
-              </Box>
-            </Box>
-          </Paper>
-        </Grid>
 
-        <Grid item xs={12} md={6}>
-          <AnimatePresence>
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-              >
-                <Alert severity="error" sx={{ mb: 3 }}>
-                  {error}
-                </Alert>
-              </motion.div>
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
             )}
 
-            {result && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                size="large"
+                disabled={loading || !text.trim()}
+                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SendOutlined />}
               >
-                <Card>
-                  <CardContent>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        mb: 2,
-                      }}
-                    >
-                      {getThreatIcon(result.threat_score)}
-                      <Typography
-                        variant="h6"
-                        sx={{ ml: 1, color: getThreatColor(result.threat_score) }}
-                      >
-                        {result.analysis_results.details}
-                      </Typography>
-                    </Box>
+                {loading ? 'Analyzing...' : 'Analyze Text'}
+              </Button>
+            </Box>
+          </form>
+        </Paper>
 
-                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Threat Score
-                        </Typography>
-                        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-                          <CircularProgress
-                            variant="determinate"
-                            value={result.threat_score * 100}
-                            size={80}
-                            sx={{ color: getProgressColor(result.threat_score) }}
-                          />
-                          <Box
-                            sx={{
-                              top: 0,
-                              left: 0,
-                              bottom: 0,
-                              right: 0,
-                              position: 'absolute',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Typography variant="caption" component="div">
-                              {`${(result.threat_score * 100).toFixed(1)}%`}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Confidence
-                        </Typography>
-                        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-                          <CircularProgress
-                            variant="determinate"
-                            value={result.confidence_score * 100}
-                            size={80}
-                            sx={{ color: theme.palette.primary.main }}
-                          />
-                          <Box
-                            sx={{
-                              top: 0,
-                              left: 0,
-                              bottom: 0,
-                              right: 0,
-                              position: 'absolute',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Typography variant="caption" component="div">
-                              {`${(result.confidence_score * 100).toFixed(1)}%`}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Grid>
-                    </Grid>
-
-                    <Box sx={{ mt: 3 }}>
-                      <Typography variant="subtitle2" color="textSecondary">
-                        Recommended Actions
-                      </Typography>
-                      {result.remediation_suggestions.actions.map((action, index) => (
-                        <Alert
-                          key={index}
-                          severity={
-                            result.threat_score >= 0.7
-                              ? 'error'
-                              : result.threat_score >= 0.4
-                              ? 'warning'
-                              : 'success'
-                          }
-                          sx={{ mt: 1 }}
-                        >
-                          {action}
-                        </Alert>
-                      ))}
-                    </Box>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </Grid>
-      </Grid>
+        {renderAnalysisResult()}
+      </Box>
     </Container>
   );
 };

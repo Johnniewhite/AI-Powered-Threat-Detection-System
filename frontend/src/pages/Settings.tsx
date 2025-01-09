@@ -63,7 +63,7 @@ export const Settings: React.FC = () => {
     setLoading(true);
 
     try {
-      await api.put('/api/v1/users/me', {
+      await api.put('/users/me', {
         current_password: formData.currentPassword,
         new_password: formData.newPassword,
       });

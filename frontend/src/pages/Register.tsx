@@ -1,58 +1,71 @@
 import React, { useState } from 'react';
 import {
-  Box,
   Container,
   Paper,
   Typography,
   TextField,
   Button,
-  Link,
+  Box,
   Alert,
+  Link,
+  useTheme,
+  alpha
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { api } from '../services/api';
+import { auth } from '../services/api';
 
-export const Register: React.FC = () => {
+const Register = () => {
+  const theme = useTheme();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
-    username: '',
     password: '',
     confirmPassword: '',
+    username: '',
+    full_name: ''
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
-      [name]: value,
+      [name]: value
     }));
-    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
+    // Validate form
+    if (!formData.email || !formData.password || !formData.confirmPassword) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    setLoading(true);
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
 
+    setLoading(true);
     try {
-      await api.post('/api/v1/auth/register', {
+      await auth.register({
         email: formData.email,
-        username: formData.username,
         password: formData.password,
+        username: formData.username || undefined,
+        full_name: formData.full_name || undefined
       });
-      navigate('/login');
+      navigate('/dashboard');
     } catch (err) {
-      setError('Failed to register. Please try again.');
-      console.error('Registration error:', err);
+      setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -60,95 +73,98 @@ export const Register: React.FC = () => {
 
   return (
     <Container maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper
-          elevation={3}
-          sx={{
-            padding: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            width: '100%',
+      <Box sx={{ py: 4 }}>
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            p: 4,
+            background: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(10px)'
           }}
         >
-          <Typography component="h1" variant="h4" gutterBottom>
-            Sign Up
+          <Typography variant="h4" component="h1" gutterBottom align="center">
+            Register
           </Typography>
-          {error && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
+
+          <form onSubmit={handleSubmit}>
             <TextField
-              margin="normal"
-              required
               fullWidth
-              id="email"
-              label="Email Address"
+              label="Email"
               name="email"
-              autoComplete="email"
-              autoFocus
+              type="email"
               value={formData.email}
               onChange={handleChange}
-            />
-            <TextField
               margin="normal"
               required
+            />
+
+            <TextField
               fullWidth
-              id="username"
               label="Username"
               name="username"
-              autoComplete="username"
               value={formData.username}
               onChange={handleChange}
-            />
-            <TextField
               margin="normal"
-              required
+            />
+
+            <TextField
               fullWidth
-              name="password"
+              label="Full Name"
+              name="full_name"
+              value={formData.full_name}
+              onChange={handleChange}
+              margin="normal"
+            />
+
+            <TextField
+              fullWidth
               label="Password"
+              name="password"
               type="password"
-              id="password"
-              autoComplete="new-password"
               value={formData.password}
               onChange={handleChange}
-            />
-            <TextField
               margin="normal"
               required
+            />
+
+            <TextField
               fullWidth
-              name="confirmPassword"
               label="Confirm Password"
+              name="confirmPassword"
               type="password"
-              id="confirmPassword"
-              autoComplete="new-password"
               value={formData.confirmPassword}
               onChange={handleChange}
+              margin="normal"
+              required
             />
+
+            {error && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {error}
+              </Alert>
+            )}
+
             <Button
               type="submit"
-              fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              color="primary"
+              fullWidth
+              size="large"
               disabled={loading}
+              sx={{ mt: 3 }}
             >
-              {loading ? 'Signing up...' : 'Sign Up'}
+              {loading ? 'Registering...' : 'Register'}
             </Button>
-            <Box sx={{ textAlign: 'center' }}>
-              <Link component={RouterLink} to="/login" variant="body2">
-                Already have an account? Sign In
-              </Link>
+
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Typography variant="body2">
+                Already have an account?{' '}
+                <Link component={RouterLink} to="/login">
+                  Login here
+                </Link>
+              </Typography>
             </Box>
-          </Box>
+          </form>
         </Paper>
       </Box>
     </Container>

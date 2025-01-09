@@ -1,96 +1,68 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Box,
   Container,
   Grid,
   Paper,
   Typography,
+  Box,
   CircularProgress,
-  Card,
-  CardContent,
+  Alert,
   useTheme,
+  alpha
 } from '@mui/material';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
+  TrendingUp as TrendingUpIcon,
+  Security as SecurityIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckCircleIcon
+} from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../services/api';
+import { dashboard } from '../services/api';
 
 interface DashboardStats {
   total_detections: number;
-  recent_threats: {
-    critical: number;
-    high: number;
-    moderate: number;
-    low: number;
-  };
-  threat_categories: {
-    phishing: number;
-    malware: number;
-    spam: number;
-    suspicious: number;
-  };
-  detection_history: {
-    date: string;
-    count: number;
-  }[];
+  high_risk_count: number;
+  medium_risk_count: number;
+  low_risk_count: number;
+  recent_detections: Array<{
+    id: string;
+    threat_score: number;
+    threat_category: string;
+    created_at: string;
+  }>;
 }
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const { isAuthenticated } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const COLORS = {
-    critical: '#ff1744',
-    high: '#ff9100',
-    moderate: '#ffea00',
-    low: '#00e676',
-    phishing: '#7c4dff',
-    malware: '#d500f9',
-    spam: '#2196f3',
-    suspicious: '#ff9800',
-  };
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!isAuthenticated()) {
+        setError('Authentication required');
+        setLoading(false);
+        return;
+      }
+
       try {
-        const response = await api.get('/api/v1/dashboard/stats');
-        setStats(response.data);
-        setError(null);
+        const data = await dashboard.getStats();
+        setStats(data);
       } catch (err) {
-        setError('Failed to load dashboard statistics');
-        console.error('Error fetching dashboard stats:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch dashboard stats');
       } finally {
         setLoading(false);
       }
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
 
   if (loading) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="80vh"
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
         <CircularProgress />
       </Box>
     );
@@ -98,176 +70,172 @@ const Dashboard: React.FC = () => {
 
   if (error) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="80vh"
-      >
-        <Typography color="error" variant="h6">
-          {error}
-        </Typography>
-      </Box>
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Alert severity="error">{error}</Alert>
+      </Container>
     );
   }
 
-  const threatLevelData = stats ? [
-    { name: 'Critical', value: stats.recent_threats.critical },
-    { name: 'High', value: stats.recent_threats.high },
-    { name: 'Moderate', value: stats.recent_threats.moderate },
-    { name: 'Low', value: stats.recent_threats.low },
-  ] : [];
-
-  const categoryData = stats ? [
-    { name: 'Phishing', value: stats.threat_categories.phishing },
-    { name: 'Malware', value: stats.threat_categories.malware },
-    { name: 'Spam', value: stats.threat_categories.spam },
-    { name: 'Suspicious', value: stats.threat_categories.suspicious },
-  ] : [];
+  if (!stats) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Alert severity="info">No dashboard data available</Alert>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Grid container spacing={3}>
-        {/* Welcome Card */}
+        {/* Total Detections */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            sx={{
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              background: alpha(theme.palette.background.paper, 0.8),
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <TrendingUpIcon color="primary" sx={{ mr: 1 }} />
+              <Typography variant="h6" component="h2">
+                Total Detections
+              </Typography>
+            </Box>
+            <Typography variant="h3" component="p">
+              {stats.total_detections}
+            </Typography>
+          </Paper>
+        </Grid>
+
+        {/* High Risk */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            sx={{
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              background: alpha(theme.palette.background.paper, 0.8),
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <WarningIcon color="error" sx={{ mr: 1 }} />
+              <Typography variant="h6" component="h2">
+                High Risk
+              </Typography>
+            </Box>
+            <Typography variant="h3" component="p" color="error">
+              {stats.high_risk_count}
+            </Typography>
+          </Paper>
+        </Grid>
+
+        {/* Medium Risk */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            sx={{
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              background: alpha(theme.palette.background.paper, 0.8),
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <SecurityIcon color="warning" sx={{ mr: 1 }} />
+              <Typography variant="h6" component="h2">
+                Medium Risk
+              </Typography>
+            </Box>
+            <Typography variant="h3" component="p" color="warning.main">
+              {stats.medium_risk_count}
+            </Typography>
+          </Paper>
+        </Grid>
+
+        {/* Low Risk */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            sx={{
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              background: alpha(theme.palette.background.paper, 0.8),
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <CheckCircleIcon color="success" sx={{ mr: 1 }} />
+              <Typography variant="h6" component="h2">
+                Low Risk
+              </Typography>
+            </Box>
+            <Typography variant="h3" component="p" color="success.main">
+              {stats.low_risk_count}
+            </Typography>
+          </Paper>
+        </Grid>
+
+        {/* Recent Detections */}
         <Grid item xs={12}>
           <Paper
             sx={{
-              p: 3,
-              display: 'flex',
-              flexDirection: 'column',
-              background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-              color: 'white',
+              p: 2,
+              background: alpha(theme.palette.background.paper, 0.8),
+              backdropFilter: 'blur(10px)'
             }}
           >
-            <Typography variant="h4" gutterBottom>
-              Welcome back, {user?.username}
+            <Typography variant="h6" gutterBottom component="h2">
+              Recent Detections
             </Typography>
-            <Typography variant="subtitle1">
-              Your threat detection dashboard is ready
-            </Typography>
-          </Paper>
-        </Grid>
-
-        {/* Stats Cards */}
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total Detections
-              </Typography>
-              <Typography variant="h4">
-                {stats?.total_detections || 0}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: COLORS.critical, color: 'white' }}>
-            <CardContent>
-              <Typography gutterBottom>Critical Threats</Typography>
-              <Typography variant="h4">
-                {stats?.recent_threats.critical || 0}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: COLORS.high, color: 'white' }}>
-            <CardContent>
-              <Typography gutterBottom>High Risk Threats</Typography>
-              <Typography variant="h4">
-                {stats?.recent_threats.high || 0}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: COLORS.moderate }}>
-            <CardContent>
-              <Typography gutterBottom>Moderate Threats</Typography>
-              <Typography variant="h4">
-                {stats?.recent_threats.moderate || 0}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Threat Level Distribution */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" gutterBottom>
-              Threat Level Distribution
-            </Typography>
-            <Box sx={{ height: 300 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={threatLevelData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label
+            {stats.recent_detections.length > 0 ? (
+              <Box>
+                {stats.recent_detections.map((detection) => (
+                  <Box
+                    key={detection.id}
+                    sx={{
+                      py: 1,
+                      borderBottom: 1,
+                      borderColor: 'divider',
+                      '&:last-child': { borderBottom: 0 }
+                    }}
                   >
-                    {threatLevelData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={Object.values(COLORS)[index]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Threat Categories */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" gutterBottom>
-              Threat Categories
-            </Typography>
-            <Box sx={{ height: 300 }}>
-              <ResponsiveContainer>
-                <BarChart data={categoryData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value" fill={theme.palette.primary.main} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Detection History */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Detection History
-            </Typography>
-            <Box sx={{ height: 300 }}>
-              <ResponsiveContainer>
-                <BarChart data={stats?.detection_history || []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar
-                    dataKey="count"
-                    fill={theme.palette.secondary.main}
-                    name="Detections"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
+                    <Grid container alignItems="center" spacing={2}>
+                      <Grid item xs={12} sm={4}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          {new Date(detection.created_at).toLocaleDateString()}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <Typography>{detection.threat_category}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <Typography
+                          color={
+                            detection.threat_score > 0.7
+                              ? 'error'
+                              : detection.threat_score > 0.4
+                              ? 'warning.main'
+                              : 'success.main'
+                          }
+                        >
+                          Risk Score: {(detection.threat_score * 100).toFixed(1)}%
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                ))}
+              </Box>
+            ) : (
+              <Typography color="text.secondary">No recent detections</Typography>
+            )}
           </Paper>
         </Grid>
       </Grid>
